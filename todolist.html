@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <title>To-Do List - Filtreli</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #000000;
+      color: #14ceb5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-top: 40px;
+    }
+
+    input, select, button {
+      padding: 10px;
+      margin: 5px;
+      font-size: 14px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+
+    button {
+      cursor: pointer;
+      border: none;
+      background-color: #14ceb5;
+      color: rgb(0, 0, 0);
+    }
+
+    ul {
+      list-style: none;
+      padding: 0;
+      margin-top: 20px;
+      width: 350px;
+    }
+
+    li {
+      background: #f1f1f1;
+      margin-bottom: 10px;
+      padding: 10px;
+      border-radius: 5px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+
+    .top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .completed {
+      text-decoration: line-through;
+      color: gray;
+    }
+
+    .late {
+      color: red;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Yapılacaklar Listesi</h1>
+
+  <div>
+    <input type="text" id="taskInput" placeholder="Görev..." />
+    <input type="datetime-local" id="taskTime" />
+    <select id="filterSelect" onchange="applyFilter()">
+      <option value="all">Tümü</option>
+      <option value="done">Yapılanlar</option>
+      <option value="notdone">Yapılmayanlar</option>
+      <option value="upcoming">Henüz zamanı gelmeyenler</option>
+    </select>
+    <button onclick="addTask()">Ekle</button>
+  </div>
+
+  <ul id="taskList"></ul>
+
+  <script>
+    window.onload = () => {
+      loadTasks();
+    };
+
+    function addTask() {
+      const text = document.getElementById("taskInput").value.trim();
+      const time = document.getElementById("taskTime").value;
+      if (!text || !time) {
+        alert("Lütfen görev ve zaman girin!");
+        return;
+      }
+
+      const tasks = getTasksFromStorage();
+      tasks.push({ text, time, completed: false });
+      saveTasksToStorage(tasks);
+      displayTask(text, time, false);
+      document.getElementById("taskInput").value = "";
+      document.getElementById("taskTime").value = "";
+      applyFilter(); // filtre uygula yeni eklenince
+    }
+
+    function displayTask(text, time, completed) {
+      const li = document.createElement("li");
+      if (completed) li.classList.add("completed");
+
+      li.dataset.time = time;
+      li.dataset.text = text;
+      li.dataset.completed = completed;
+
+      const topDiv = document.createElement("div");
+      topDiv.className = "top";
+
+      const span = document.createElement("span");
+      span.textContent = text;
+      span.style.flexGrow = "1";
+      span.onclick = () => {
+        li.classList.toggle("completed");
+        toggleCompleted(text);
+        li.dataset.completed = !completed;
+        applyFilter(); // değişince filtre uygula
+      };
+
+      const btns = document.createElement("div");
+
+      const editBtn = document.createElement("button");
+      editBtn.textContent = "Düzenle";
+      editBtn.onclick = () => {
+        const newText = prompt("Yeni görev:", span.textContent);
+        if (newText && newText.trim()) {
+          updateTaskText(text, newText.trim());
+          span.textContent = newText.trim();
+        }
+      };
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.textContent = "Sil";
+      deleteBtn.onclick = () => {
+        li.remove();
+        deleteTask(text);
+      };
+
+      btns.appendChild(editBtn);
+      btns.appendChild(deleteBtn);
+
+      topDiv.appendChild(span);
+      topDiv.appendChild(btns);
+
+      const timeP = document.createElement("p");
+      timeP.textContent = "🕒 " + new Date(time).toLocaleString();
+      timeP.className = "time-info";
+
+      const lateMsg = document.createElement("p");
+      lateMsg.textContent = "❌ Yapılmadı";
+      lateMsg.className = "late";
+      lateMsg.style.display = (new Date(time) < new Date() && !completed) ? "block" : "none";
+
+      li.appendChild(topDiv);
+      li.appendChild(timeP);
+      li.appendChild(lateMsg);
+
+      document.getElementById("taskList").appendChild(li);
+    }
+
+    function loadTasks() {
+      const tasks = getTasksFromStorage();
+      document.getElementById("taskList").innerHTML = "";
+      tasks.forEach(t => displayTask(t.text, t.time, t.completed));
+      applyFilter();
+    }
+
+    function getTasksFromStorage() {
+      const data = localStorage.getItem("tasks");
+      return data ? JSON.parse(data) : [];
+    }
+
+    function saveTasksToStorage(tasks) {
+      localStorage.setItem("tasks", JSON.stringify(tasks));
+    }
+
+    function toggleCompleted(text) {
+      const tasks = getTasksFromStorage();
+      const task = tasks.find(t => t.text === text);
+      if (task) {
+        task.completed = !task.completed;
+        saveTasksToStorage(tasks);
+      }
+    }
+
+    function updateTaskText(oldText, newText) {
+      const tasks = getTasksFromStorage();
+      const task = tasks.find(t => t.text === oldText);
+      if (task) {
+        task.text = newText;
+        saveTasksToStorage(tasks);
+      }
+    }
+
+    function deleteTask(text) {
+      let tasks = getTasksFromStorage();
+      tasks = tasks.filter(t => t.text !== text);
+      saveTasksToStorage(tasks);
+    }
+
+    function applyFilter() {
+      const filter = document.getElementById("filterSelect").value;
+      const items = document.querySelectorAll("#taskList li");
+      const now = new Date();
+
+      items.forEach(li => {
+        const completed = li.classList.contains("completed");
+        const taskTime = new Date(li.dataset.time);
+
+        if (filter === "done") {
+          // sadece tamamlananlar göster
+          li.style.display = completed ? "block" : "none";
+        } else if (filter === "notdone") {
+          // sadece tamamlanmayan ve zamanı geçmiş olanlar
+          li.style.display = (!completed && taskTime < now) ? "block" : "none";
+        } else if (filter === "upcoming") {
+          // zamanı gelmeyenler
+          li.style.display = (taskTime >= now) ? "block" : "none";
+        } else {
+          // tümü
+          li.style.display = "block";
+        }
+      });
+    }
+  </script>
+
+</body>
+</html>
